@@ -116,3 +116,4 @@ Open `http://localhost:8000` or open `public/index.html` in your browser.
    - Click **Deploy**.
 
 Your application will be live globally on your Vercel URL (e.g. `https://braille-digitizer.vercel.app`)!
+
