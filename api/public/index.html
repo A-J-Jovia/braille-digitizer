@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Braille Digitizer — Shadow-Assisted OBR System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .dragover { border-color: #3b82f6 !important; background-color: #eff6ff !important; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl shadow-md">
+          <i class="fa-solid fa-braille"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 leading-tight">BRAILLE DIGITIZER</h1>
+          <p class="text-xs text-slate-500 font-medium">Shadow-Assisted Optical Braille Recognition (OBR) System</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex bg-slate-100 p-1 rounded-xl">
+        <button id="tab-recognize" onclick="switchTab('recognize')" class="px-4 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-blue-600 transition">
+          <i class="fa-solid fa-camera mr-2"></i>Recognize Braille
+        </button>
+        <button id="tab-generate" onclick="switchTab('generate')" class="px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition">
+          <i class="fa-solid fa-pen-nib mr-2"></i>Generate Braille
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- TAB 1: RECOGNIZE BRAILLE -->
+    <section id="panel-recognize" class="space-y-8">
+
+      <!-- Upload Zone -->
+      <div class="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-8 text-center hover:border-blue-500 transition cursor-pointer relative" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+        <div class="flex flex-col items-center justify-center gap-3">
+          <div class="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-2xl">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </div>
+          <div>
+            <span class="font-semibold text-slate-900">Click to upload</span> or drag and drop a Braille page image
+            <p class="text-xs text-slate-500 mt-1">Supports PNG, JPG, JPEG, BMP (Photographed with side-lighting or scanned)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Samples -->
+      <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+        <span class="text-xs text-slate-400 font-medium mr-1"><i class="fa-solid fa-bolt text-amber-500 mr-1"></i>Try Instant Sample:</span>
+        <button onclick="loadSample('hello world\nbraille digitizer')" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-600 transition shadow-xs">Sample 1: 'Hello World'</button>
+        <button onclick="loadSample('the quick brown fox\njumps over the lazy dog')" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-600 transition shadow-xs">Sample 2: Pangram</button>
+        <button onclick="loadSample('123 456 789\nbraille 2026')" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-600 transition shadow-xs">Sample 3: Numbers & Text</button>
+      </div>
+
+      <!-- Processing Status -->
+      <div id="status-card" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between text-blue-900 text-sm">
+        <div class="flex items-center gap-3">
+          <div id="status-spinner" class="animate-spin text-blue-600 text-lg">
+            <i class="fa-solid fa-circle-notch"></i>
+          </div>
+          <span id="status-text" class="font-medium">Processing shadow map and reconstructing grid lattice...</span>
+        </div>
+        <div id="stats-badges" class="hidden flex gap-2">
+          <span id="badge-dots" class="px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-blue-700 shadow-sm border border-blue-100"></span>
+          <span id="badge-cells" class="px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-emerald-700 shadow-sm border border-emerald-100"></span>
+        </div>
+      </div>
+
+      <!-- Results Grid -->
+      <div id="results-container" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- Left: Visual Canvas / Lattice -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-microscope text-blue-600"></i>Reconstructed 2×3 Grid Lattice
+              </h3>
+              <span class="text-xs text-slate-500 font-medium">Green: Centroids | Blue: Cells</span>
+            </div>
+            <div class="w-full bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center min-h-[340px]">
+              <img id="overlay-img" class="max-h-[500px] w-auto object-contain" alt="Lattice Overlay">
+            </div>
+          </div>
+
+          <!-- Right: Decoded Bilingual Text -->
+          <div class="space-y-6 flex flex-col">
+
+            <!-- English Text -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3 flex-1 flex flex-col">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <i class="fa-solid fa-font text-blue-600"></i>Translated English (UEB)
+                </h3>
+                <button onclick="copyText('english-text')" class="text-xs text-blue-600 font-semibold hover:text-blue-800 flex items-center gap-1">
+                  <i class="fa-regular fa-copy"></i>Copy
+                </button>
+              </div>
+              <textarea id="english-text" readonly class="flex-grow w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono text-slate-800 focus:outline-none resize-none min-h-[140px]"></textarea>
+            </div>
+
+            <!-- Russian Text -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3 flex-1 flex flex-col">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <i class="fa-solid fa-language text-purple-600"></i>Translated Russian Braille
+                </h3>
+                <button onclick="copyText('russian-text')" class="text-xs text-purple-600 font-semibold hover:text-purple-800 flex items-center gap-1">
+                  <i class="fa-regular fa-copy"></i>Copy
+                </button>
+              </div>
+              <textarea id="russian-text" readonly class="flex-grow w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono text-slate-800 focus:outline-none resize-none min-h-[140px]"></textarea>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: GENERATE BRAILLE -->
+    <section id="panel-generate" class="hidden space-y-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4 max-w-3xl mx-auto">
+        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-pen-fancy text-blue-600"></i>Text-to-Braille Chart Generator
+        </h2>
+        <p class="text-sm text-slate-500">
+          Type English text below to synthesize a raised-dot Braille chart with standardized typography ($d_x=12\text{px}$, line spacing $=45\text{px}$).
+        </p>
+        <textarea id="gen-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none min-h-[120px]" placeholder="Type text here...">hello world&#10;braille digitizer</textarea>
+        <button onclick="generateBraille()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition shadow-md flex items-center justify-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>Synthesize Braille Document
+        </button>
+
+        <div id="gen-result" class="hidden pt-4 border-t border-slate-100 space-y-4">
+          <div class="w-full bg-slate-100 rounded-xl p-4 flex items-center justify-center border border-slate-200">
+            <img id="gen-output-img" class="max-h-[400px] w-auto shadow-sm rounded-lg" alt="Generated Braille">
+          </div>
+          <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+            <button onclick="testGeneratedInRecognizer()" class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm">
+              <i class="fa-solid fa-microscope"></i>Recognize Generated Chart &rarr;
+            </button>
+            <a id="download-btn" download="braille_document.png" class="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-download"></i>Download PNG
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4">
+      <p class="font-medium text-slate-700">Braille Digitizer OBR System &bull; Vercel Serverless Architecture</p>
+      <p class="mt-1">Powered by Whole-Page Lattice Grid Alignment, k-d Tree Spatial Pitch Estimation, and Unified English Braille (UEB).</p>
+    </div>
+  </footer>
+
+  <script>
+    function switchTab(tab) {
+      const pRecognize = document.getElementById('panel-recognize');
+      const pGenerate = document.getElementById('panel-generate');
+      const tRecognize = document.getElementById('tab-recognize');
+      const tGenerate = document.getElementById('tab-generate');
+
+      if (tab === 'recognize') {
+        pRecognize.classList.remove('hidden');
+        pGenerate.classList.add('hidden');
+        tRecognize.className = "px-4 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-blue-600 transition";
+        tGenerate.className = "px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition";
+      } else {
+        pRecognize.classList.add('hidden');
+        pGenerate.classList.remove('hidden');
+        tGenerate.className = "px-4 py-2 text-sm font-semibold rounded-lg bg-white shadow-sm text-blue-600 transition";
+        tRecognize.className = "px-4 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition";
+      }
+    }
+
+    const dropZone = document.getElementById('drop-zone');
+    ['dragenter', 'dragover'].forEach(name => {
+      dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    });
+    ['dragleave', 'drop'].forEach(name => {
+      dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+    });
+    dropZone.addEventListener('drop', (e) => {
+      if (e.dataTransfer.files.length) {
+        processFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleFileSelect(event) {
+      if (event.target.files.length) {
+        processFile(event.target.files[0]);
+      }
+    }
+
+    async function processFile(file) {
+      const statusCard = document.getElementById('status-card');
+      const statusText = document.getElementById('status-text');
+      const statusSpinner = document.getElementById('status-spinner');
+      const statsBadges = document.getElementById('stats-badges');
+      const resultsContainer = document.getElementById('results-container');
+
+      statusCard.classList.remove('hidden');
+      statusSpinner.classList.remove('hidden');
+      statsBadges.classList.add('hidden');
+      statusText.innerText = "Analyzing raised dots and estimating lattice geometry...";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch("/api/recognize", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error("Recognition failed: " + response.statusText);
+        }
+
+        const data = await response.json();
+
+        // Update UI
+        statusSpinner.classList.add('hidden');
+        statusText.innerText = `Successfully processed: ${data.dots_count} dots detected, ${data.cells_count} Braille cells decoded.`;
+        document.getElementById('badge-dots').innerText = `${data.dots_count} Dots`;
+        document.getElementById('badge-cells').innerText = `${data.cells_count} Cells`;
+        statsBadges.classList.remove('hidden');
+
+        document.getElementById('overlay-img').src = data.overlay_image;
+        document.getElementById('english-text').value = data.english_text;
+        document.getElementById('russian-text').value = data.russian_text;
+
+        resultsContainer.classList.remove('hidden');
+      } catch (err) {
+        statusSpinner.classList.add('hidden');
+        statusText.innerText = "Error: " + err.message;
+      }
+    }
+
+    async function generateBraille() {
+      const text = document.getElementById('gen-input').value;
+      if (!text.trim()) return;
+
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text })
+        });
+
+        const data = await response.json();
+        if (data.chart_image) {
+          const genResult = document.getElementById('gen-result');
+          const genOutputImg = document.getElementById('gen-output-img');
+          const downloadBtn = document.getElementById('download-btn');
+
+          genOutputImg.src = data.chart_image;
+          downloadBtn.href = data.chart_image;
+          genResult.classList.remove('hidden');
+        }
+      } catch (err) {
+        alert("Failed to synthesize Braille chart: " + err.message);
+      }
+    }
+
+    function copyText(elemId) {
+      const copyText = document.getElementById(elemId);
+      copyText.select();
+      navigator.clipboard.writeText(copyText.value);
+    }
+
+    async function loadSample(sampleText) {
+      const statusCard = document.getElementById('status-card');
+      const statusText = document.getElementById('status-text');
+      const statusSpinner = document.getElementById('status-spinner');
+      statusCard.classList.remove('hidden');
+      statusSpinner.classList.remove('hidden');
+      statusText.innerText = "Synthesizing sample Braille document...";
+
+      try {
+        const genRes = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: sampleText })
+        });
+        const genData = await genRes.json();
+        if (genData.chart_image) {
+          const fetchImg = await fetch(genData.chart_image);
+          const blob = await fetchImg.blob();
+          const file = new File([blob], "sample.png", { type: "image/png" });
+          processFile(file);
+        }
+      } catch (err) {
+        statusSpinner.classList.add('hidden');
+        statusText.innerText = "Sample load error: " + err.message;
+      }
+    }
+
+    async function testGeneratedInRecognizer() {
+      const imgEl = document.getElementById('gen-output-img');
+      if (!imgEl.src) return;
+      const res = await fetch(imgEl.src);
+      const blob = await res.blob();
+      const file = new File([blob], "generated_braille.png", { type: "image/png" });
+      switchTab('recognize');
+      processFile(file);
+    }
+  </script>
+</body>
+</html>

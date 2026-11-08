@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 import cv2
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -16,6 +16,17 @@ except ImportError:
     from api import braille_engine as be
 
 app = FastAPI(title="Braille Digitizer OBR API", description="Serverless Braille Recognition and Synthesis API")
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    for p in [
+        Path(__file__).parent.parent / "public" / "index.html",
+        Path(__file__).parent / "public" / "index.html",
+        Path("public/index.html")
+    ]:
+        if p.exists():
+            return HTMLResponse(content=p.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>Braille Digitizer OBR API is running!</h1>")
 
 class GenerateRequest(BaseModel):
     text: str
