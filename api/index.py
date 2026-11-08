@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import cv2
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -36,28 +36,24 @@ def health_check():
 
 @app.post("/api/recognize")
 @app.post("/recognize")
-async def recognize_braille(file: UploadFile = File(...)):
+async def recognize_braille(file: UploadFile = File(...), rotation: int = Form(0)):
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
         img_np = np.array(image)
         gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
-        # 1. Shadow-assisted preprocessing
-        enhanced, shadow = be.preprocess_shadow_map(gray)
+        # 1. Whole-page lattice grid decoding with auto-orientation
+        doc, all_cells, dots, proc_gray, applied_rot = be.decode_page_with_auto_orient(
+            gray, force_rotate=rotation, auto_orient=(rotation == 0)
+        )
 
-        # 2. Connected component dot detection
-        dots = be.detect_dot_centroids(shadow)
-
-        # 3. Whole-page lattice grid decoding
-        doc, all_cells = be.decode_page_lattice(dots, gray.shape)
-
-        # 4. Bilingual translation
+        # 2. Bilingual translation
         en_text = be.translate_document(doc, lang="EN")
         ru_text = be.translate_document(doc, lang="RU")
 
-        # 5. Render lattice visual overlay
-        vis = be.render_lattice_overlay(gray, all_cells, detected_dots=dots)
+        # 3. Render lattice visual overlay
+        vis = be.render_lattice_overlay(proc_gray, all_cells, detected_dots=dots)
         is_success, buffer = cv2.imencode(".png", cv2.cvtColor(vis, cv2.COLOR_RGB2BGR))
         if is_success:
             overlay_b64 = "data:image/png;base64," + base64.b64encode(buffer).decode("utf-8")
@@ -70,7 +66,8 @@ async def recognize_braille(file: UploadFile = File(...)):
             "russian_text": ru_text,
             "dots_count": len(dots),
             "cells_count": len(all_cells),
-            "overlay_image": overlay_b64
+            "overlay_image": overlay_b64,
+            "rotation_applied": applied_rot
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

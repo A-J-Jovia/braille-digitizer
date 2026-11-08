@@ -395,3 +395,69 @@ def generate_braille_image(text, dot_radius=3, dot_spacing=12, char_spacing=28, 
             col_x += char_spacing
 
     return img
+
+# ==============================================================================
+# 7. AUTO-ORIENTATION & COHERENCE SCORING
+# ==============================================================================
+
+COMMON_ENGLISH_WORDS = {
+    'the', 'and', 'for', 'are', 'can', 'trees', 'is', 'year', 'growing', 
+    'redwoods', 'sequoias', 'in', 'on', 'at', 'to', 'of', 'a', 'it', 'was', 
+    'as', 'he', 'she', 'that', 'with', 'from', 'by', 'this', 'have', 'not'
+}
+
+def score_english_coherence(text):
+    """Evaluates how closely the decoded text resembles natural English."""
+    import re
+    words = re.findall(r'[a-zA-Z]+', text.lower())
+    if not words:
+        return -100
+    score = sum(5 for w in words if w in COMMON_ENGLISH_WORDS)
+    score += sum(2 for w in words if len(w) >= 3 and any(v in w for v in 'aeiou'))
+    score -= text.count('?') * 3
+    score -= text.count(';') * 2
+    score -= text.count('[dots') * 4
+    return score
+
+def decode_page_with_auto_orient(gray_img, force_rotate=0, auto_orient=True):
+    """
+    Evaluates page orientation (0 deg vs 180 deg) to automatically correct upside-down photos.
+    Returns: (doc, all_cells, dots, processed_gray, applied_rotation)
+    """
+    if force_rotate == 90:
+        gray_img = cv2.rotate(gray_img, cv2.ROTATE_90_CLOCKWISE)
+    elif force_rotate == 180:
+        gray_img = cv2.rotate(gray_img, cv2.ROTATE_180)
+    elif force_rotate == 270:
+        gray_img = cv2.rotate(gray_img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+    if not auto_orient or force_rotate != 0:
+        enhanced, shadow = preprocess_shadow_map(gray_img)
+        dots = detect_dot_centroids(shadow)
+        doc, all_cells = decode_page_lattice(dots, gray_img.shape)
+        return doc, all_cells, dots, gray_img, force_rotate
+
+    # 1. Test 0 degrees (current)
+    enh0, sh0 = preprocess_shadow_map(gray_img)
+    dots0 = detect_dot_centroids(sh0)
+    doc0, cells0 = decode_page_lattice(dots0, gray_img.shape)
+    text0 = translate_document(doc0, lang="EN")
+    score0 = score_english_coherence(text0)
+
+    # 2. Test 180 degrees (inverted)
+    gray180 = cv2.rotate(gray_img, cv2.ROTATE_180)
+    enh180, sh180 = preprocess_shadow_map(gray180)
+    dots180 = detect_dot_centroids(sh180)
+    doc180, cells180 = decode_page_lattice(dots180, gray180.shape)
+    text180_a = translate_document(doc180, lang="EN")
+    text180_b = translate_document(doc180[::-1], lang="EN")
+    score180_a = score_english_coherence(text180_a)
+    score180_b = score_english_coherence(text180_b)
+
+    if max(score180_a, score180_b) > (score0 + 10):
+        # 180 degree rotation is clearly superior (upside-down upload detected!)
+        if score180_b >= score180_a:
+            doc180 = doc180[::-1]
+        return doc180, cells180, dots180, gray180, 180
+    else:
+        return doc0, cells0, dots0, gray_img, 0

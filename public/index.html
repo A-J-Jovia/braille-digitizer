@@ -85,11 +85,22 @@
 
           <!-- Left: Visual Canvas / Lattice -->
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
-            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 gap-2">
               <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <i class="fa-solid fa-microscope text-blue-600"></i>Reconstructed 2×3 Grid Lattice
               </h3>
-              <span class="text-xs text-slate-500 font-medium">Green: Centroids | Blue: Cells</span>
+              <!-- Rotation controls -->
+              <div class="flex items-center gap-1.5">
+                <button onclick="rotateImage(180)" title="Invert or rotate 180 degrees if page was photographed upside down" class="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-xs font-semibold rounded-lg text-slate-700 transition flex items-center gap-1">
+                  <i class="fa-solid fa-arrows-rotate"></i> Rotate 180&deg;
+                </button>
+                <button onclick="rotateImage(90)" title="Rotate 90 degrees Clockwise" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-xs font-semibold rounded-lg text-slate-700 transition">
+                  <i class="fa-solid fa-rotate-right"></i>
+                </button>
+                <button onclick="rotateImage(270)" title="Rotate 90 degrees Counter-Clockwise" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-xs font-semibold rounded-lg text-slate-700 transition">
+                  <i class="fa-solid fa-rotate-left"></i>
+                </button>
+              </div>
             </div>
             <div class="w-full bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center min-h-[340px]">
               <img id="overlay-img" class="max-h-[500px] w-auto object-contain" alt="Lattice Overlay">
@@ -191,6 +202,9 @@
       }
     }
 
+    let currentFile = null;
+    let currentRotation = 0;
+
     const dropZone = document.getElementById('drop-zone');
     ['dragenter', 'dragover'].forEach(name => {
       dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -200,17 +214,30 @@
     });
     dropZone.addEventListener('drop', (e) => {
       if (e.dataTransfer.files.length) {
-        processFile(e.dataTransfer.files[0]);
+        currentFile = e.dataTransfer.files[0];
+        currentRotation = 0;
+        processFile(currentFile, 0);
       }
     });
 
     function handleFileSelect(event) {
       if (event.target.files.length) {
-        processFile(event.target.files[0]);
+        currentFile = event.target.files[0];
+        currentRotation = 0;
+        processFile(currentFile, 0);
       }
     }
 
-    async function processFile(file) {
+    function rotateImage(deg) {
+      if (!currentFile) return;
+      currentRotation = (currentRotation + deg) % 360;
+      processFile(currentFile, currentRotation);
+    }
+
+    async function processFile(file, rotation = 0) {
+      currentFile = file;
+      currentRotation = rotation;
+
       const statusCard = document.getElementById('status-card');
       const statusText = document.getElementById('status-text');
       const statusSpinner = document.getElementById('status-spinner');
@@ -224,6 +251,7 @@
 
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("rotation", rotation);
 
       try {
         const response = await fetch("/api/recognize", {
@@ -239,7 +267,11 @@
 
         // Update UI
         statusSpinner.classList.add('hidden');
-        statusText.innerText = `Successfully processed: ${data.dots_count} dots detected, ${data.cells_count} Braille cells decoded.`;
+        if (data.rotation_applied && data.rotation_applied > 0) {
+          statusText.innerText = `Auto-corrected ${data.rotation_applied}\u00B0 inverted orientation: ${data.dots_count} dots, ${data.cells_count} Braille cells decoded.`;
+        } else {
+          statusText.innerText = `Successfully processed: ${data.dots_count} dots detected, ${data.cells_count} Braille cells decoded.`;
+        }
         document.getElementById('badge-dots').innerText = `${data.dots_count} Dots`;
         document.getElementById('badge-cells').innerText = `${data.cells_count} Cells`;
         statsBadges.classList.remove('hidden');
