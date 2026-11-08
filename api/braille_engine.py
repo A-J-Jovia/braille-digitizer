@@ -28,11 +28,12 @@ UEB_ENGLISH_MAP = {
     '36': '-', '3': "'", '356': '"', '26': '?'
 }
 
-# Common UEB Contractions
+# Common UEB Contractions per Project Report Section 6.1
 UEB_CONTRACTIONS = {
     '12346': 'and', '123456': 'for', '12356': 'of', '2346': 'the', '23456': 'with',
-    '16': 'ch', '146': 'sh', '1456': 'th', '156': 'wh', '126': 'ed',
-    '1246': 'er', '12456': 'ou', '1256': 'ow', '346': 'ing'
+    '16': 'ch', '126': 'gh', '146': 'sh', '1456': 'th', '156': 'wh',
+    '1246': 'ed', '12456': 'er', '1256': 'ou', '246': 'ow', '34': 'st',
+    '346': 'ing', '345': 'ar', '35': 'in', '26': 'en'
 }
 
 # Number prefix and digit mapping
