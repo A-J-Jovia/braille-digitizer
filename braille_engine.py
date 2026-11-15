@@ -137,34 +137,30 @@ def estimate_lattice_parameters(dots_xy):
     """
     Estimates horizontal dot pitch (dx), vertical dot pitch (dy), character pitch,
     and word spacing threshold using nearest-neighbor spatial queries via cKDTree
-    (or vectorized numpy fallback if scipy is omitted).
+    (or vectorized numpy fallback if scipy is omitted) as formulated in Project Report Section 3.3.2:
+        d = median_i( min_{j != i} ||c_i - c_j||_2 )
     """
     if len(dots_xy) < 4:
         return 12.0, 12.0, 38.4
 
     dots_arr = np.array(dots_xy, dtype=np.float32)
-    dy_candidates = []
 
     if HAS_SCIPY:
         tree = cKDTree(dots_arr)
-        for x, y in dots_arr:
-            indices = tree.query_ball_point([x, y], r=35)
-            for j in indices:
-                x2, y2 = dots_arr[j]
-                dx = abs(x2 - x)
-                dy = y2 - y
-                if 6 <= dy <= 30 and dx <= 6:
-                    dy_candidates.append(dy)
+        distances, _ = tree.query(dots_arr, k=2)
+        nn_dists = distances[:, 1]
     else:
-        for x, y in dots_arr:
-            dxs = np.abs(dots_arr[:, 0] - x)
-            dys = dots_arr[:, 1] - y
-            mask = (dys >= 6) & (dys <= 30) & (dxs <= 6)
-            dy_candidates.extend(dys[mask].tolist())
+        diff = dots_arr[:, np.newaxis, :] - dots_arr[np.newaxis, :, :]
+        dist_matrix = np.sqrt(np.sum(diff ** 2, axis=-1))
+        np.fill_diagonal(dist_matrix, np.inf)
+        nn_dists = np.min(dist_matrix, axis=1)
 
-    median_dy = float(np.median(dy_candidates)) if dy_candidates else 12.0
-    # Standard Braille intra-cell aspect ratio is 1:1
-    median_dx = median_dy
+    valid_nn = nn_dists[nn_dists >= 2.0]
+    median_d = float(np.median(valid_nn)) if len(valid_nn) > 0 else 12.0
+
+    # Standard Braille intra-cell aspect ratio is 1:1 (Report Section 3.3.2)
+    median_dx = median_d
+    median_dy = median_d
     word_thresh = median_dx * 3.2
 
     return median_dx, median_dy, word_thresh
