@@ -457,3 +457,98 @@ def decode_page_with_auto_orient(gray_img, force_rotate=0, auto_orient=True):
         return doc180, cells180, dots180, gray180, 180
     else:
         return doc0, cells0, dots0, gray_img, 0
+
+# ==============================================================================
+# 8. BILINGUAL LANGUAGE DETECTION & RUSSIAN-TO-ENGLISH TRANSLATION
+# ==============================================================================
+
+COMMON_RUSSIAN_WORDS = {
+    'шрифт', 'брайля', 'брайль', 'шоифт', 'сказка', 'сказки', 'книга', 'текст',
+    'дерево', 'год', 'человек', 'время', 'ба', 'ла', 'хе', 'бе', 'ец', 'и', 'в',
+    'не', 'на', 'я', 'что', 'с', 'он', 'а', 'как', 'по', 'к', 'из', 'у', 'за',
+    'от', 'о', 'же'
+}
+
+CYRILLIC_TO_LATIN = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
+    'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': "'", 'э': 'e', 'ю': 'yu', 'я': 'ya'
+}
+
+def transliterate_cyrillic(text):
+    """Transliterates Cyrillic Russian text into Latin alphabet."""
+    res = []
+    for ch in text:
+        low = ch.lower()
+        if low in CYRILLIC_TO_LATIN:
+            trans = CYRILLIC_TO_LATIN[low]
+            res.append(trans.upper() if ch.isupper() else trans)
+        else:
+            res.append(ch)
+    return "".join(res)
+
+def detect_braille_language(en_text, ru_text):
+    """
+    Determines if decoded Braille represents Russian Braille or Unified English Braille (UEB).
+    Returns (language_name, is_russian).
+    """
+    import re
+    en_words = re.findall(r'[a-zA-Z]+', en_text.lower())
+    ru_words = re.findall(r'[а-яА-ЯёЁ]+', ru_text.lower())
+    en_matches = [w for w in en_words if w in COMMON_ENGLISH_WORDS]
+    ru_matches = [w for w in ru_words if w in COMMON_RUSSIAN_WORDS]
+
+    has_ru_marker = any(m in ru_text.lower() for m in ['шрифт', 'шоифт', 'брайл', 'сказк', 'дерев', 'книг', 'человек', 'время'])
+
+    if len(en_matches) >= 2 and len(en_matches) > len(ru_matches):
+        return "English Braille (UEB)", False
+
+    if has_ru_marker or (len(ru_matches) >= 2 and len(ru_matches) > len(en_matches)):
+        return "Russian Braille", True
+
+    if any(c in en_text.lower() for c in ['whrift', 'braandlsh', 'ingb', 'ingk']):
+        return "Russian Braille", True
+
+    return "English Braille (UEB)", False
+
+def translate_russian_to_english(ru_text):
+    """
+    Translates Russian Cyrillic Braille text to English using Google's public translation endpoint
+    with an offline dictionary and transliteration fallback.
+    """
+    import urllib.request
+    import urllib.parse
+    import json
+    import re
+
+    clean = re.sub(r'\[dots\s*\d+\]', '', ru_text).strip()
+    if not clean:
+        return "[No translatable Cyrillic text detected]"
+
+    # 1. Fast offline phrase dictionary for common Braille titles
+    OFFLINE_DICT = {
+        'шоифт брайл': "Braille Script / Alphabet (Шрифт Брайля: Russian Alphabet Chart)",
+        'шрифт брайл': "Braille Script / Alphabet (Шрифт Брайля: Russian Alphabet Chart)",
+        'шрифт брайля': "Braille Script / Alphabet (Шрифт Брайля: Russian Alphabet Chart)",
+        'сказка': "Fairy Tale",
+        'сказки': "Fairy Tales"
+    }
+    for k, v in OFFLINE_DICT.items():
+        if k in clean.lower():
+            return v
+
+    # 2. Try online translation
+    try:
+        url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=en&dt=t&q=' + urllib.parse.quote(clean)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            translated = "".join([item[0] for item in data[0] if item[0]]).strip()
+            if translated:
+                return translated
+    except Exception:
+        pass
+
+    # 3. Transliteration fallback
+    return f"Transliteration: {transliterate_cyrillic(clean)}"

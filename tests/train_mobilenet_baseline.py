@@ -49,8 +49,11 @@ DOT_OFFSETS = {
     4: (1, 0), 5: (1, 1), 6: (1, 2)
 }
 
-def generate_synthetic_cell(letter, img_size=64, pitch=14, radius=3.5, jitter=1.5):
-    """Generates an RGB PIL image of an isolated 2x3 Braille cell for a given letter."""
+def generate_synthetic_cell(letter, img_size=224, pitch=45, radius=11.0, jitter=4.0):
+    """
+    Generates a 224x224 RGB PIL image of an isolated 2x3 Braille cell for a given letter.
+    Fulfills Project Report Section 5.1.4 and Section 5.4.2.
+    """
     img = Image.new("RGB", (img_size, img_size), color=(250, 250, 250))
     draw = ImageDraw.Draw(img)
 
@@ -63,9 +66,9 @@ def generate_synthetic_cell(letter, img_size=64, pitch=14, radius=3.5, jitter=1.
     dots = LETTER_DOTS[letter]
     for d in dots:
         col, row = DOT_OFFSETS[d]
-        px = x_left + col * pitch + random.uniform(-0.5, 0.5)
-        py = y_top + row * pitch + random.uniform(-0.5, 0.5)
-        r = radius + random.uniform(-0.5, 0.5)
+        px = x_left + col * pitch + random.uniform(-1.0, 1.0)
+        py = y_top + row * pitch + random.uniform(-1.0, 1.0)
+        r = radius + random.uniform(-1.0, 1.0)
         draw.ellipse([px - r, py - r, px + r, py + r], fill=(40, 40, 40))
 
     return img
@@ -97,16 +100,16 @@ def train_mobilenet_baseline(epochs=12, batch_size=32, lr=0.001):
     for letter in CLASSES:
         label = CLASS_TO_IDX[letter]
         for i in range(20):
-            pitch = random.randint(12, 16)
-            radius = random.uniform(3.0, 4.2)
-            img = generate_synthetic_cell(letter, img_size=64, pitch=pitch, radius=radius)
+            pitch = random.randint(40, 50)
+            radius = random.uniform(9.5, 12.5)
+            img = generate_synthetic_cell(letter, img_size=224, pitch=pitch, radius=radius)
             if i < 16:  # 80% train (16 * 26 = 416)
                 train_samples.append((img, label))
             else:       # 20% val (4 * 26 = 104)
                 val_samples.append((img, label))
 
         # Also generate 1 test sample per letter (26 test)
-        img_test = generate_synthetic_cell(letter, img_size=64, pitch=14, radius=3.5)
+        img_test = generate_synthetic_cell(letter, img_size=224, pitch=45, radius=11.0)
         test_samples.append((img_test, label))
 
     train_transform = T.Compose([

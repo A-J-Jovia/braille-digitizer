@@ -29,6 +29,9 @@ async def read_root():
 class GenerateRequest(BaseModel):
     text: str
 
+class TranslateRequest(BaseModel):
+    text: str
+
 @app.get("/api/health")
 @app.get("/health")
 def health_check():
@@ -48,9 +51,12 @@ async def recognize_braille(file: UploadFile = File(...), rotation: int = Form(0
             gray, force_rotate=rotation, auto_orient=(rotation == 0)
         )
 
-        # 2. Bilingual translation
+        # 2. Bilingual translation and language detection
         en_text = be.translate_document(doc, lang="EN")
         ru_text = be.translate_document(doc, lang="RU")
+
+        detected_lang, is_russian = be.detect_braille_language(en_text, ru_text)
+        ru_to_en = be.translate_russian_to_english(ru_text) if is_russian else ""
 
         # 3. Render lattice visual overlay
         vis = be.render_lattice_overlay(proc_gray, all_cells, detected_dots=dots)
@@ -64,10 +70,28 @@ async def recognize_braille(file: UploadFile = File(...), rotation: int = Form(0
             "status": "success",
             "english_text": en_text,
             "russian_text": ru_text,
+            "detected_language": detected_lang,
+            "is_russian": is_russian,
+            "russian_to_english": ru_to_en,
             "dots_count": len(dots),
             "cells_count": len(all_cells),
             "overlay_image": overlay_b64,
             "rotation_applied": applied_rot
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/translate")
+@app.post("/translate")
+async def translate_text(req: TranslateRequest):
+    try:
+        if not req.text.strip():
+            return {"status": "success", "translation": ""}
+        translated = be.translate_russian_to_english(req.text)
+        return {
+            "status": "success",
+            "original": req.text,
+            "translation": translated
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
