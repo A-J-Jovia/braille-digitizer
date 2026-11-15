@@ -27,33 +27,50 @@ A production-ready, lightweight Optical Braille Recognition (OBR) and Synthesis 
 
 ## 📁 Project Structure
 
-```
-vercel_app/
-├── api/
-│   ├── index.py              # FastAPI serverless endpoints (/api/recognize, /api/generate, /api/health)
-│   ├── braille_engine.py      # Core lattice reconstruction & UEB translation engine
-│   └── requirements.txt      # Dependency specification for serverless build
-├── public/
-│   └── index.html            # Tailwind CSS responsive frontend
-├── requirements.txt          # Root dependency specification
-├── vercel.json               # Modern Vercel URL rewrite routing configuration
-├── .gitignore
-└── README.md
+```text
+D:\Braille_Digitizer\
+├── api/                     # FastAPI backend & recognition engine
+│   ├── index.py             # Serverless endpoints (/api/recognize, /api/generate, /api/health)
+│   ├── braille_engine.py    # Whole-page lattice reconstruction & UEB translation engine
+│   ├── html_page.py         # Embedded responsive web UI module
+│   └── public/
+│       └── index.html       # Standalone UI asset
+├── public/                  # Static frontend
+│   └── index.html           # Tailwind CSS responsive web interface
+├── notebooks/               # Research & development notebooks
+│   ├── Braille_Digitizer_CLEANED.ipynb   # Verified 31-cell cleaned pipeline
+│   └── Braille_Digitalizer_original.ipynb # Original 135-cell Colab notebook
+├── docs/                    # Project reports & academic documentation
+│   ├── Braille_Digitizer_Report_FIXED.pdf
+│   └── Braille_Digitizer_Report_JOVIA_A_J_Corrected.docx
+├── tests/                   # End-to-end verification test scripts
+│   ├── test_api_endpoints.py
+│   ├── test_multiline.py
+│   └── test_orientations.py
+├── samples/                 # Sample test images
+│   └── sample_braille_sheet.jpg
+├── braille_engine.py        # Root standalone recognition engine
+├── main.py                  # Local / serverless entrypoint
+├── requirements.txt         # Lightweight serverless dependencies
+├── vercel.json              # Vercel deployment routing configuration
+├── .vercelignore            # Prevents docs/notebooks from inflating serverless bundle
+├── .gitignore               # Excludes caches and local files
+└── README.md                # Project documentation
 ```
 
 ---
 
-## 💻 Local Testing
+## 💻 Local Testing & Running
 
-You can run and test the app locally with Uvicorn:
+You can run the full web app locally with Uvicorn:
 
 ```bash
-cd vercel_app
+cd D:\Braille_Digitizer
 pip install -r requirements.txt
-uvicorn api.index:app --reload --port 8000
+python main.py
 ```
 
-Open `http://localhost:8000` or open `public/index.html` in your browser.
+Then open `http://localhost:8000` in your browser.
 
 ---
 
