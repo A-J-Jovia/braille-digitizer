@@ -399,8 +399,16 @@ def generate_braille_image(text, dot_radius=3, dot_spacing=12, char_spacing=28, 
 COMMON_ENGLISH_WORDS = {
     'the', 'and', 'for', 'are', 'can', 'trees', 'is', 'year', 'growing', 
     'redwoods', 'sequoias', 'in', 'on', 'at', 'to', 'of', 'a', 'it', 'was', 
-    'as', 'he', 'she', 'that', 'with', 'from', 'by', 'this', 'have', 'not'
+    'as', 'he', 'she', 'that', 'with', 'from', 'by', 'this', 'have', 'not',
+    'quick', 'brown', 'fox', 'jumps', 'over', 'lazy', 'dog', 'hello', 'world',
+    'braille', 'alphabet'
 }
+
+def is_alphabet_sequence(text):
+    """Detects if text contains an ordered Braille alphabet or contraction reference sequence."""
+    cleaned = ' '.join(text.lower().split())
+    patterns = ['a b c d', 'a b c', 'h i j k', 'o p q r', 'and for of the with', 'sh th wh']
+    return any(p in cleaned for p in patterns)
 
 def score_english_coherence(text):
     """Evaluates how closely the decoded text resembles natural English."""
@@ -408,10 +416,13 @@ def score_english_coherence(text):
     words = re.findall(r'[a-zA-Z]+', text.lower())
     if not words:
         return -100
-    score = sum(5 for w in words if w in COMMON_ENGLISH_WORDS)
+
+    alphabet_bonus = 60 if is_alphabet_sequence(text) else 0
+    score = alphabet_bonus
+    score += sum(6 for w in words if w in COMMON_ENGLISH_WORDS)
     score += sum(2 for w in words if len(w) >= 3 and any(v in w for v in 'aeiou'))
-    score -= text.count('?') * 3
-    score -= text.count(';') * 2
+    score -= text.count('?') * 2
+    score -= text.count(';') * 1
     score -= text.count('[dots') * 4
     return score
 
@@ -464,9 +475,8 @@ def decode_page_with_auto_orient(gray_img, force_rotate=0, auto_orient=True):
 
 COMMON_RUSSIAN_WORDS = {
     'шрифт', 'брайля', 'брайль', 'шоифт', 'сказка', 'сказки', 'книга', 'текст',
-    'дерево', 'год', 'человек', 'время', 'ба', 'ла', 'хе', 'бе', 'ец', 'и', 'в',
-    'не', 'на', 'я', 'что', 'с', 'он', 'а', 'как', 'по', 'к', 'из', 'у', 'за',
-    'от', 'о', 'же'
+    'дерево', 'дерева', 'человек', 'время', 'дело', 'жизнь', 'день', 'рука',
+    'когда', 'только', 'будет', 'очень', 'между', 'после', 'через', 'сказал'
 }
 
 CYRILLIC_TO_LATIN = {
@@ -494,20 +504,27 @@ def detect_braille_language(en_text, ru_text):
     Returns (language_name, is_russian).
     """
     import re
-    en_words = re.findall(r'[a-zA-Z]+', en_text.lower())
-    ru_words = re.findall(r'[а-яА-ЯёЁ]+', ru_text.lower())
+
+    # 1. Check for standard English Braille alphabet chart
+    if is_alphabet_sequence(en_text):
+        return "English Braille (UEB)", False
+
+    # 2. Check for strong Russian marker words
+    has_ru_marker = any(m in ru_text.lower() for m in ['шрифт', 'шоифт', 'брайл', 'сказк', 'дерев', 'книг', 'человек'])
+
+    # 3. Only count meaningful words of length >= 3 to avoid single-letter collisions
+    en_words = [w for w in re.findall(r'[a-zA-Z]+', en_text.lower()) if len(w) >= 3]
+    ru_words = [w for w in re.findall(r'[а-яА-ЯёЁ]+', ru_text.lower()) if len(w) >= 3]
     en_matches = [w for w in en_words if w in COMMON_ENGLISH_WORDS]
     ru_matches = [w for w in ru_words if w in COMMON_RUSSIAN_WORDS]
 
-    has_ru_marker = any(m in ru_text.lower() for m in ['шрифт', 'шоифт', 'брайл', 'сказк', 'дерев', 'книг', 'человек', 'время'])
-
-    if len(en_matches) >= 2 and len(en_matches) > len(ru_matches):
+    if len(en_matches) >= 2 and len(en_matches) >= len(ru_matches):
         return "English Braille (UEB)", False
 
     if has_ru_marker or (len(ru_matches) >= 2 and len(ru_matches) > len(en_matches)):
         return "Russian Braille", True
 
-    if any(c in en_text.lower() for c in ['whrift', 'braandlsh', 'ingb', 'ingk']):
+    if any(c in en_text.lower() for c in ['whrift', 'braandlsh']) and not is_alphabet_sequence(en_text):
         return "Russian Braille", True
 
     return "English Braille (UEB)", False
